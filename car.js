@@ -120,10 +120,10 @@ function keydown(ev, gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
       g_xAngle = (g_xAngle - ANGLE_STEP) % 360;
       break;
     case 39: // Right arrow key -> the positive rotation of arm1 around the y-axis
-      g_yAngle = (g_yAngle + ANGLE_STEP) % 360;
+      g_wheelAngle = (g_wheelAngle + ANGLE_STEP) % 360;
       break;
     case 37: // Left arrow key -> the negative rotation of arm1 around the y-axis
-      g_yAngle = (g_yAngle - ANGLE_STEP) % 360;
+      g_wheelAngle = (g_wheelAngle - ANGLE_STEP) % 360;
       break;
     default: return; // Skip drawing at no effective action
   }
@@ -340,8 +340,15 @@ function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
 	
 	// Make wheels
 	pushMatrix(modelMatrix);
+	modelMatrix.rotate(g_wheelAngle, 0, 0, 1);
 	modelMatrix.scale(0.6, 0.6, 0.2); // Scale
 	modelMatrix.translate(1.5, -0.8, 3);  // Translation
+	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
+	modelMatrix.translate(0,0,-6);  // Translation
+	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
+	modelMatrix.translate(-3,0,0);  // Translation
+	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
+	modelMatrix.translate(0,0,6);  // Translation
 	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
 	modelMatrix = popMatrix();
 }
