@@ -16,11 +16,30 @@
                 margin: auto;
                 display: flex;
             }
+			#out {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 200px;
+				max-height: 100vh;
+				overflow: scroll;
+			}
+			#info {
+				position: absolute;
+				top:0;
+				right:0;
+				width: 200px;
+				max-height: 100vh;
+			}
         </style>
     </head>
     <body onload="main()">
+		<div id="out">
+		</div>
         <canvas id="scene" width="800px" height="800px">
         </canvas>
+		<div id="info">
+		</div>
 		<script src="lib/webgl-utils.js"></script>
 		<script src="lib/webgl-debug.js"></script>
 		<script src="lib/cuon-utils.js"></script>
