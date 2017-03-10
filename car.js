@@ -1,31 +1,44 @@
-// Directional lighting demo: By Frederick Li
+
 // Vertex shader program
 var VSHADER_SOURCE =
-  'attribute vec4 a_Position;\n' +
-  'attribute vec4 a_Color;\n' +
-  'attribute vec4 a_Normal;\n' +        // Normal
-  'uniform mat4 u_ModelMatrix;\n' +
-  'uniform mat4 u_NormalMatrix;\n' +
-  'uniform mat4 u_ViewMatrix;\n' +
-  'uniform mat4 u_ProjMatrix;\n' +
-  'uniform vec3 u_LightColor;\n' +     // Light color
-  'uniform vec3 u_LightDirection;\n' + // Light direction (in the world coordinate, normalized)
-  'varying vec4 v_Color;\n' +
-  'uniform bool u_isLighting;\n' +
-  'void main() {\n' +
-  '  gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;\n' +
-  '  if(u_isLighting)\n' + 
-  '  {\n' +
-  '     vec3 normal = normalize((u_NormalMatrix * a_Normal).xyz);\n' +
-  '     float nDotL = max(dot(normal, u_LightDirection), 0.0);\n' +
-        // Calculate the color due to diffuse reflection
-  '     vec3 diffuse = u_LightColor * a_Color.rgb * nDotL;\n' +
-  '     v_Color = vec4(diffuse, a_Color.a);\n' +  '  }\n' +
-  '  else\n' +
-  '  {\n' +
-  '     v_Color = a_Color;\n' +
-  '  }\n' + 
-  '}\n';
+	'attribute vec4 a_Position;\n' +
+	'attribute vec4 a_Color;\n' +
+	'attribute vec4 a_Normal;\n' +        // Normal
+	'uniform mat4 u_ModelMatrix;\n' +
+	'uniform mat4 u_NormalMatrix;\n' +
+	'uniform mat4 u_ViewMatrix;\n' +
+	'uniform mat4 u_ProjMatrix;\n' +
+	'uniform vec3 u_LightColor;\n' +     // Light color
+	'uniform vec3 u_LightDirection;\n' + // Light direction (in the world coordinate, normalized)
+	'uniform vec3 u_LightPosition;\n' +
+	'uniform vec3 u_AmbientLight;\n' + 
+	'varying vec3 v_Normal;\n' +
+	'varying vec4 v_Color;\n' +
+	'uniform bool u_isDirectionalLighting;\n' +
+	'uniform bool u_isPointLighting;\n' +
+	'void main() {\n' +
+	'  gl_Position = u_ProjMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;\n' +
+	'  if(u_isDirectionalLighting)\n' + 
+	'  {\n' +
+	'     vec3 normal = normalize((u_NormalMatrix * a_Normal).xyz);\n' +
+	'     float nDotL = max(dot(normal, u_LightDirection), 0.0);\n' +
+	'     vec3 diffuse = u_LightColor * a_Color.rgb * nDotL;\n' +
+	'     v_Color = vec4(diffuse, a_Color.a);\n' +
+	'  }\n' +
+	'  else if(u_isPointLighting) \n' +
+	'  { \n' +
+	'    vec4 vertexPosition = u_ModelMatrix * a_Position;\n' +
+	'    vec3 lightDirection = normalize(u_LightPosition- vec3(vertexPosition));\n' +
+	'    v_Normal = normalize((u_NormalMatrix * a_Normal).xyz);\n' +
+	'    float nDotL = max(dot( lightDirection, v_Normal), 0.0); \n' +
+	'    vec3 diffuse = u_LightColor * a_Color.rgb * nDotL; \n' +
+	'    vec3 ambient = u_AmbientLight * a_Color.rgb; \n' +
+	'    v_Color = vec4(diffuse + ambient, a_Color.a); \n' +
+	'  } else \n' +
+	'  {\n' +
+	'     v_Color = a_Color;\n' +
+	'  }\n' + 
+	'}\n';
 
 // Fragment shader program
 var FSHADER_SOURCE =
@@ -36,6 +49,7 @@ var FSHADER_SOURCE =
   'void main() {\n' +
   '  gl_FragColor = v_Color;\n' +
   '}\n';
+
 
 var modelMatrix = new Matrix4(); // The model matrix
 var viewMatrix = new Matrix4();  // The view matrix
@@ -48,13 +62,13 @@ var g_wheelAngle = 0.0;
 var g_doorOpen = false;
 var g_carXPos = 0;
 var g_carZPos = 0;
-var g_carPosChange = 0.009;
+var g_carPosChange = 0.005;
 var g_carVelocity = 0;
 var g_carVelocityDecrease = 0.004;
 var g_keysPressed = {};
 var g_planeSize = 40;
 var g_lightingMode = 0;
-var g_lightingModes = ["DIRECTIONAL", "POINT"]
+var g_lightingModes = ["DIRECTIONAL", "POINT","NONE"]
 var g_cameraMode = 0;
 var g_cameraModes = ["STATIC","FOLLOW","THIRDPERSON","FIRSTPERSON"]
 
@@ -71,8 +85,8 @@ function main() {
 
 	// Initialize shaders
 	if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
-	console.log('Failed to intialize shaders.');
-	return;
+		console.log('Failed to intialize shaders.');
+		return;
 	}
 
 	// Set clear color and enable hidden surface removal
@@ -89,13 +103,20 @@ function main() {
 	var u_ProjMatrix = gl.getUniformLocation(gl.program, 'u_ProjMatrix');
 	var u_LightColor = gl.getUniformLocation(gl.program, 'u_LightColor');
 	var u_LightDirection = gl.getUniformLocation(gl.program, 'u_LightDirection');
+	var u_LightPosition = gl.getUniformLocation(gl.program, 'u_LightPosition');
+	var u_AmbientLight = gl.getUniformLocation(gl.program, 'u_AmbientLight');
 
 	// Trigger using lighting or not
-	var u_isLighting = gl.getUniformLocation(gl.program, 'u_isLighting'); 
+	var u_isDirectionalLighting = gl.getUniformLocation(gl.program, 'u_isDirectionalLighting'); 
+	var u_isPointLighting = gl.getUniformLocation(gl.program, 'u_isPointLighting'); 
+	gl.uniform3f(u_LightPosition, 0, 10, 0);
+	// Set the ambient light
+	gl.uniform3f(u_AmbientLight, 0.1, 0.1, 0.1);
+
 
 	if (!u_ModelMatrix || !u_ViewMatrix || !u_NormalMatrix ||
 	  !u_ProjMatrix || !u_LightColor || !u_LightDirection ||
-	  !u_isLighting ) { 
+	  !u_isDirectionalLighting || !u_isPointLighting ) { 
 		console.log('Failed to Get the storage locations of u_ModelMatrix, u_ViewMatrix, and/or u_ProjMatrix');
 		return;
 	}
@@ -112,7 +133,6 @@ function main() {
 	projMatrix.setPerspective(30, canvas.width/canvas.height, 1, 1500);
 	// Pass the model, view, and projection matrix to the uniform variable respectively
 	gl.uniformMatrix4fv(u_ProjMatrix, false, projMatrix.elements);
-
 
 	document.onkeydown = function(ev){
 		g_keysPressed[ev.keyCode] = true;
@@ -142,9 +162,9 @@ function main() {
 		g_keysPressed[ev.keyCode] = false;
 	};
 	
-	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting);
+	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
 	setInterval(function() {
-		tick(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting);
+		tick(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
 	}, 1)
 }
 
@@ -155,7 +175,7 @@ function updateView(gl) {
 			viewMatrix.setLookAt(0, 50, 100, 0, 0, 0, 0, 1, -10);
 			break;
 		case 1: // Follow
-			viewMatrix.setLookAt(g_carXPos, 50, 100, g_carXPos, 0, g_carZPos, 0, 1, -10);
+			viewMatrix.setLookAt(g_carXPos, 25, 50, g_carXPos, 0, g_carZPos, 0, 1, -10);
 			break
 		case 2: // Third person
 			viewMatrix.setLookAt(g_carXPos+15*Math.sin(degToRadian(g_yAngle+90)), 5, g_carZPos+15*Math.cos(degToRadian(g_yAngle+90)),
@@ -164,7 +184,7 @@ function updateView(gl) {
 			break;
 		case 3: // First person
 			viewMatrix.setLookAt(g_carXPos-1*Math.sin(degToRadian(g_yAngle+90)), 1, g_carZPos-1*Math.cos(degToRadian(g_yAngle+90)),
-				g_carXPos-15*Math.sin(degToRadian(g_yAngle+90)), 1, g_carZPos-15*Math.cos(degToRadian(g_yAngle+90)),
+				g_carXPos-15*Math.sin(degToRadian(g_yAngle+90)), -2, g_carZPos-15*Math.cos(degToRadian(g_yAngle+90)),
 				Math.sin(degToRadian(g_yAngle+90)), 1, Math.cos(degToRadian(g_yAngle+90))
 			);
 		default:
@@ -188,7 +208,7 @@ function writeInfo() {
 	document.getElementById("info").innerHTML = s;
 }
 
-function tick(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
+function tick(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting) {
 	for (var keycode in g_keysPressed) {
 		if (g_keysPressed[keycode]) {
 			keydown(keycode);
@@ -203,7 +223,7 @@ function tick(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
 	g_carXPos += g_carVelocity*Math.sin(degToRadian(g_yAngle+90));
 	g_carZPos += g_carVelocity*Math.cos(degToRadian(g_yAngle+90));
 	writeInfo();
-	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting);
+	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
 }
 
 function keydown(keycode) {
@@ -367,15 +387,15 @@ function initArrayBuffer (gl, attribute, data, num, type) {
 
 var g_matrixStack = []; // Array for storing a matrix
 function pushMatrix(m) { // Store the specified matrix to the array
-  var m2 = new Matrix4(m);
-  g_matrixStack.push(m2);
+	var m2 = new Matrix4(m);
+	g_matrixStack.push(m2);
 }
 
 function popMatrix() { // Retrieve the matrix from the array
-  return g_matrixStack.pop();
+	return g_matrixStack.pop();
 }
 
-function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
+function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting) {
 	// Clear color and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
@@ -384,8 +404,17 @@ function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
 	// Pass the model matrix to the uniform variable
 	gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
 
-	gl.uniform1i(u_isLighting, true); // Will apply lighting
+	gl.uniform1i(u_isDirectionalLighting, false);
+	gl.uniform1i(u_isPointLighting, false);
 
+	switch(g_lightingMode) {
+		case 0:
+			gl.uniform1i(u_isDirectionalLighting, true);
+			break;
+		case 1:
+			gl.uniform1i(u_isPointLighting, true);
+			break;
+	}
 	// Set the vertex coordinates and color (for the cube)
 	var n = initVertexBuffers(gl, "RED");
 	if (n < 0) {
@@ -428,25 +457,25 @@ function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isLighting) {
 	// Push onto the stack to save the state to draw all wheels the same
 	// Wheel 1
 	pushMatrix(modelMatrix);
-	modelMatrix.translate(1.5, -0.8 ,-3);  // Translation
+	modelMatrix.translate(1.5, -0.8 ,-4);  // Translation
 	modelMatrix.rotate(g_wheelAngle, 0, 0, 1); // Rotate wheels
 	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
 	modelMatrix = popMatrix();
 	// Wheel 2
 	pushMatrix(modelMatrix);
-	modelMatrix.translate(-1.5,-0.8,3);  // Translation
+	modelMatrix.translate(-1.5,-0.8,4);  // Translation
 	modelMatrix.rotate(g_wheelAngle, 0, 0, 1); // Rotate wheels
 	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
 	modelMatrix = popMatrix();
 	// Wheel 3
 	pushMatrix(modelMatrix);
-	modelMatrix.translate(-1.5,-0.8,-3);  // Translation
+	modelMatrix.translate(-1.5,-0.8,-4);  // Translation
 	modelMatrix.rotate(g_wheelAngle, 0, 0, 1); // Rotate wheels
 	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
 	modelMatrix = popMatrix();
 	// Wheel 4
 	pushMatrix(modelMatrix);
-	modelMatrix.translate(1.5, -0.8, 3);  // Translation
+	modelMatrix.translate(1.5, -0.8, 4);  // Translation
 	modelMatrix.rotate(g_wheelAngle, 0, 0, 1); // Rotate wheels
 	drawbox(gl, u_ModelMatrix, u_NormalMatrix, n);
 	modelMatrix = popMatrix();
