@@ -160,9 +160,10 @@ function main() {
 	};
 	// Init our loop to render the scene
 	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
-	setInterval(function() {
+	// Use requestAnimationFrame rather than setInterval because it's better
+	requestAnimationFrame(function() {
 		tick(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
-	}, 5)
+	})
 }
 
 /**
@@ -173,7 +174,7 @@ function setLightPos(gl,x,y,z) {
 	gl.uniform3f(u_LightPosition, x, y, z);
 }
 
-// Set camera position according to global variable
+// Set camera position according to global variable g_cameraMode
 function updateView(gl) {
 	var u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
 	switch (g_cameraMode) {
@@ -244,6 +245,9 @@ function tick(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPo
 	}
 	writeInfo();
 	draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
+	requestAnimationFrame(function() {
+		tick(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting);
+	})
 }
 
 function keydown(keycode) {
@@ -267,6 +271,7 @@ function keydown(keycode) {
 /**
 * One time function to write buffers 
 **/
+// Copied from examples, but modified to write color buffer independently
 function initVertexBuffers(gl) {
 	var vertices = new Float32Array([   // Coordinates
 	 0.5, 0.5, 0.5,  -0.5, 0.5, 0.5,  -0.5,-0.5, 0.5,   0.5,-0.5, 0.5, // v0-v1-v2-v3 front
@@ -379,41 +384,6 @@ function writeColorBuffer(gl, color) {
 			]);
 	}
 	if (!initArrayBuffer(gl, 'a_Color', colors, 3, gl.FLOAT)) return -1;
-}
-
-function initArrayBuffer (gl, attribute, data, num, type) {
-	// Create a buffer object
-	var buffer = gl.createBuffer();
-	if (!buffer) {
-		console.log('Failed to create the buffer object');
-		return false;
-	}
-	// Write data into the buffer object
-	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-	gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-	// Assign the buffer object to the attribute variable
-	var a_attribute = gl.getAttribLocation(gl.program, attribute);
-	if (a_attribute < 0) {
-		console.log('Failed to get the storage location of ' + attribute);
-		return false;
-	}
-	gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
-	// Enable the assignment of the buffer object to the attribute variable
-	gl.enableVertexAttribArray(a_attribute);
-
-	gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-	return true;
-}
-
-var g_matrixStack = []; // Array for storing a matrix
-function pushMatrix(m) { // Store the specified matrix to the array
-	var m2 = new Matrix4(m);
-	g_matrixStack.push(m2);
-}
-
-function popMatrix() { // Retrieve the matrix from the array
-	return g_matrixStack.pop();
 }
 
 function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPointLighting) {
@@ -532,7 +502,9 @@ function draw(gl, u_ModelMatrix, u_NormalMatrix, u_isDirectionalLighting, u_isPo
 	updateView(gl);
 }
 
-
+/*****************************************************************************************************
+ Everything below this line of code is helper functions that were originally from the slides/examples
+******************************************************************************************************/
 function drawbox(gl, u_ModelMatrix, u_NormalMatrix, n) {
 	pushMatrix(modelMatrix);
 	gl.uniformMatrix4fv(u_ModelMatrix, false, modelMatrix.elements);
@@ -541,4 +513,36 @@ function drawbox(gl, u_ModelMatrix, u_NormalMatrix, n) {
 	gl.uniformMatrix4fv(u_NormalMatrix, false, g_normalMatrix.elements);
 	gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_BYTE, 0);
 	modelMatrix = popMatrix();
+}
+function initArrayBuffer (gl, attribute, data, num, type) {
+	// Create a buffer object
+	var buffer = gl.createBuffer();
+	if (!buffer) {
+		console.log('Failed to create the buffer object');
+		return false;
+	}
+	// Write data into the buffer object
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+	// Assign the buffer object to the attribute variable
+	var a_attribute = gl.getAttribLocation(gl.program, attribute);
+	if (a_attribute < 0) {
+		console.log('Failed to get the storage location of ' + attribute);
+		return false;
+	}
+	gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
+	// Enable the assignment of the buffer object to the attribute variable
+	gl.enableVertexAttribArray(a_attribute);
+
+	gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+	return true;
+}
+var g_matrixStack = []; // Array for storing a matrix
+function pushMatrix(m) { // Store the specified matrix to the array
+	var m2 = new Matrix4(m);
+	g_matrixStack.push(m2);
+}
+function popMatrix() { // Retrieve the matrix from the array
+	return g_matrixStack.pop();
 }
